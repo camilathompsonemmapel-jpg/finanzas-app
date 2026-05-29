@@ -465,7 +465,8 @@ var S = {
   ahoKey: null
 };
 
-var SCRIPT_URL = ''; // Se configura en ⚙️ Config después de publicar el script
+// URL hardcodeada — siempre funciona en cualquier dispositivo sin configurar nada
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxWmKOHxNitHl72YI4QR2sZOxiSEMfEJ-IIwW0i8aRATS2QHv5JhwPfWYKlXV0ZY0wDng/exec';
 
 // ============================================================
 //  DATOS INICIALES DE FONDOS
@@ -522,17 +523,14 @@ document.addEventListener('DOMContentLoaded', function() {
   setUsuario(USUARIO);
   setFechaHoy('aho-fch');
 
-  var savedUrl = localStorage.getItem('scriptURL') || '';
-  if (savedUrl) {
-    SCRIPT_URL = savedUrl;
-    document.getElementById('cfg-url').value = savedUrl;
-    document.getElementById('cfg-status').textContent = '✅ URL configurada';
-    setSyncStatus('Conectado ✓', false);
-    enviarPendientes();
-  } else {
-    document.getElementById('cfg-status').textContent = '⚠️ Pegá la URL del Apps Script abajo';
-    setSyncStatus('Configurar ⚙️', true);
-  }
+  // URL hardcodeada — siempre conectado desde el primer momento
+  var overrideUrl = localStorage.getItem('scriptURL');
+  if (overrideUrl) SCRIPT_URL = overrideUrl; // permite sobreescribir si es necesario
+  document.getElementById('cfg-url').value = SCRIPT_URL;
+  document.getElementById('cfg-status').textContent = '✅ Conectado a Google Sheets';
+  setSyncStatus('Conectado ✓', false);
+  // Enviar cualquier dato pendiente
+  setTimeout(enviarPendientes, 500);
 
   bindEvents();
   renderAll();
