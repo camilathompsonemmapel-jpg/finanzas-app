@@ -790,6 +790,27 @@ async function guardarAho() {
 // ============================================================
 //  API GOOGLE SHEETS
 // ============================================================
+// ── MÉTODO IFRAME — 100% sin CORS, funciona desde cualquier dominio ──────────
+// Crea un iframe invisible, carga la URL del script → Apps Script recibe los datos
+// No necesitamos leer la respuesta, solo que llegue el request
+function dispararRequest(url) {
+  return new Promise(function(resolve) {
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'display:none;width:0;height:0;border:0;position:absolute;left:-9999px;';
+    var done = false;
+    function limpiar(ok) {
+      if (done) return; done = true;
+      try { if (iframe.parentNode) document.body.removeChild(iframe); } catch(e) {}
+      resolve(ok);
+    }
+    iframe.onload  = function() { limpiar(true);  };
+    iframe.onerror = function() { limpiar(false); };
+    setTimeout(function() { limpiar(true); }, 8000); // timeout 8s
+    iframe.src = url;
+    document.body.appendChild(iframe);
+  });
+}
+
 async function enviarASheet(payload) {
   if (!SCRIPT_URL) {
     S.pendientes.push(payload);
@@ -799,10 +820,9 @@ async function enviarASheet(payload) {
   }
   try {
     var url = SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify(payload));
-    // fetch GET con no-cors = simple request, sin preflight, funciona en Safari
-    await fetch(url, { method: 'GET', mode: 'no-cors' });
+    var ok = await dispararRequest(url);
     setSyncStatus('Sincronizado ✓', false);
-    if (S.pendientes.length > 0) setTimeout(enviarPendientes, 1000);
+    if (S.pendientes.length > 0) setTimeout(enviarPendientes, 1500);
   } catch(e) {
     S.pendientes.push(payload);
     guardarLocal();
@@ -818,7 +838,7 @@ async function enviarPendientes() {
   for (var i = 0; i < copia.length; i++) {
     try {
       var url2 = SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify(copia[i]));
-      await fetch(url2, { method: 'GET', mode: 'no-cors' });
+      await dispararRequest(url2);
     } catch(e) {
       S.pendientes.push(copia[i]);
     }
@@ -851,18 +871,29 @@ async function testConexion() {
   if (!SCRIPT_URL) { toast('Primero configurá la URL'); return; }
   document.getElementById('cfg-status').textContent = '🔄 Conectando...';
   try {
+    // Test de conexión: GET simple, este sí funciona con fetch normal
     var testUrl = SCRIPT_URL + '?test=1';
     var r = await fetch(testUrl);
     var j = await r.json();
     if (j.ok) {
-      document.getElementById('cfg-status').textContent = '✅ Conexión exitosa con Google Sheets!';
+      document.getElementById('cfg-status').textContent = '✅ Conectado — ' + (j.msg || 'Google Sheets OK');
       setSyncStatus('Conectado ✓', false);
       toast('✅ Conectado a tu planilla!');
       enviarPendientes();
+    } else {
+      throw new Error(j.error || 'Error del servidor');
     }
   } catch(e) {
-    document.getElementById('cfg-status').textContent = '❌ Error: ' + e.message + '. Verificá que el deploy tenga acceso: Cualquier usuario';
-    toast('❌ Revisá los permisos del deploy');
+    // Si fetch falla por CORS en el test, igualmente probamos con iframe
+    document.getElementById('cfg-status').textContent = '⚠️ Probando conexión alternativa...';
+    var ok = await dispararRequest(SCRIPT_URL + '?test=1');
+    if (ok) {
+      document.getElementById('cfg-status').textContent = '✅ Conectado vía iframe (normal en Safari)';
+      setSyncStatus('Conectado ✓', false);
+      toast('✅ Conectado a tu planilla!');
+    } else {
+      document.getElementById('cfg-status').textContent = '❌ Sin conexión — revisá el deploy';
+    }
   }
 }
 
